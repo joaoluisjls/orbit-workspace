@@ -35,6 +35,8 @@ Deno.serve(async req=>{
   if(!companyId)return json({error:"Empresa não informada"},400);
   await member(companyId,user.id);const admin=db();
   if(body.action==="start"){
+   const missing=["ML_CLIENT_ID","ML_CLIENT_SECRET","ML_REDIRECT_URI","TOPMIX_APP_URL"].filter(name=>!Deno.env.get(name));
+   if(missing.length)return json({error:"Integração Mercado Livre ainda não configurada. Configure os segredos do backend: "+missing.join(", ")},503);
    const state=crypto.randomUUID()+crypto.randomUUID();const returnUrl=env("TOPMIX_APP_URL");
    const {error}=await admin.from("marketplace_oauth_states").insert({state,company_id:companyId,user_id:user.id,return_url:returnUrl});if(error)throw error;
    const target=new URL("https://auth.mercadolivre.com.br/authorization");target.searchParams.set("response_type","code");target.searchParams.set("client_id",env("ML_CLIENT_ID"));target.searchParams.set("redirect_uri",env("ML_REDIRECT_URI"));target.searchParams.set("state",state);
@@ -65,5 +67,5 @@ Deno.serve(async req=>{
    return json({ok:true,imported,partial:!!listing.paging&&listing.paging.total>50});
   }
   return json({error:"Ação desconhecida"},400);
- }catch(e){console.error("Mercado Livre integration error",e instanceof Error?e.message:"unknown");return json({error:e instanceof Error?e.message:"Erro inesperado"},400)}
+ }catch(e){const detail=e instanceof Error?e.message:"Erro inesperado";console.error("Mercado Livre integration error",detail);const configuration=detail.startsWith("Configuração pendente:");return json({error:configuration?"Configuração do servidor incompleta: "+detail:detail},configuration?503:400)}
 });
