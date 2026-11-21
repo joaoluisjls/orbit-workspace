@@ -10,7 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as _serverMarketplaceMlOauthRouteImport } from './routes/_server/marketplace/ml-oauth'
 
+const _serverMarketplaceMlOauthRoute = _serverMarketplaceMlOauthRouteImport.update({
+  id: '/_server/marketplace/ml-oauth',
+  path: '/_server/marketplace/ml-oauth',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,24 +25,28 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/_server/marketplace/ml-oauth': typeof _serverMarketplaceMlOauthRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/_server/marketplace/ml-oauth': typeof _serverMarketplaceMlOauthRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_server/marketplace/ml-oauth': typeof _serverMarketplaceMlOauthRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/_server/marketplace/ml-oauth'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/_server/marketplace/ml-oauth'
+  id: '__root__' | '/' | '/_server/marketplace/ml-oauth'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  _serverMarketplaceMlOauthRoute: typeof _serverMarketplaceMlOauthRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +58,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_server/marketplace/ml-oauth': {
+      id: '/_server/marketplace/ml-oauth'
+      path: '/_server/marketplace/ml-oauth'
+      fullPath: '/_server/marketplace/ml-oauth'
+      preLoaderRoute: typeof _serverMarketplaceMlOauthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  _serverMarketplaceMlOauthRoute: _serverMarketplaceMlOauthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -7,7 +7,7 @@ const redirect=(url:string,success:boolean)=>{const target=new URL(url);target.s
 async function userFor(req:Request){const token=req.headers.get("authorization")?.replace(/^Bearer /i,"");if(!token)throw new Error("Sessão necessária");const {data,error}=await db().auth.getUser(token);if(error||!data.user)throw new Error("Sessão inválida");return data.user};
 async function member(companyId:string,userId:string){const {data,error}=await db().from("company_members").select("role").eq("company_id",companyId).eq("user_id",userId).maybeSingle();if(error||!data)throw new Error("Acesso à empresa negado")};
 async function tokenRequest(params:Record<string,string>){const body=new URLSearchParams(params);const res=await fetch("https://api.mercadolibre.com/oauth/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded","accept":"application/json"},body});const data=await res.json();if(!res.ok)throw new Error("Falha na autorização do Mercado Livre: "+(data.error||res.status));return data}
-async function freshToken(accountId:string){const admin=db();const {data:creds,error}=await admin.from("marketplace_credentials").select("*").eq("account_id",accountId).single();if(error||!creds)throw new Error("Credenciais indisponíveis");if(Date.parse(creds.expires_at)>Date.now()+60000)return creds.access_token;const next=await tokenRequest({grant_type:"refresh_token",client_id:env("ML_CLIENT_ID"),client_secret:env("ML_CLIENT_SECRET"),refresh_token:creds.refresh_token});const {error:saveError}=await admin.from("marketplace_credentials").update({access_token:next.access_token,refresh_token:next.refresh_token,expires_at:new Date(Date.now()+next.expires_in*1000).toISOString()}).eq("account_id",accountId);if(saveError)throw saveError;return next.access_token}
+async function freshToken(accountId:string){const admin=db();const {data:creds,error}=await admin.from("marketplace_tokens").select("*").eq("account_id",accountId).single();if(error||!creds)throw new Error("Credenciais indisponíveis");if(Date.parse(creds.expires_at)>Date.now()+60000)return creds.access_token;const next=await tokenRequest({grant_type:"refresh_token",client_id:env("ML_CLIENT_ID"),client_secret:env("ML_CLIENT_SECRET"),refresh_token:creds.refresh_token});const {error:saveError}=await admin.from("marketplace_tokens").update({access_token:next.access_token,refresh_token:next.refresh_token||creds.refresh_token,expires_at:new Date(Date.now()+next.expires_in*1000).toISOString()}).eq("account_id",accountId);if(saveError)throw saveError;return next.access_token}
 Deno.serve(async req=>{
  if(req.method==="OPTIONS")return new Response(null,{headers:cors});
  try{
@@ -26,7 +26,7 @@ Deno.serve(async req=>{
    if(existing&&existing.company_id!==entry.company_id)throw new Error("Esta loja já está vinculada a outra empresa");
    const {data:account,error:upsertError}=await admin.from("marketplace_accounts").upsert({id:existing?.id,company_id:entry.company_id,provider:"mercadolivre",external_account_id:externalId,nickname:profile.nickname||externalId,status:"connected"},{onConflict:"provider,external_account_id"}).select("id").single();
    if(upsertError||!account)throw upsertError||new Error("Falha ao salvar conexão");
-   const {error:saveError}=await admin.from("marketplace_credentials").upsert({account_id:account.id,access_token:tokens.access_token,refresh_token:tokens.refresh_token,expires_at:new Date(Date.now()+tokens.expires_in*1000).toISOString()});
+   const {error:saveError}=await admin.from("marketplace_tokens").upsert({account_id:account.id,access_token:tokens.access_token,refresh_token:tokens.refresh_token,expires_at:new Date(Date.now()+tokens.expires_in*1000).toISOString()});
    if(saveError)throw saveError;
    return redirect(entry.return_url,true);
   }
@@ -47,7 +47,7 @@ Deno.serve(async req=>{
   }
   if(body.action==="disconnect"){
    const {data:account}=await admin.from("marketplace_accounts").select("id").eq("company_id",companyId).eq("id",body.account_id).maybeSingle();if(!account)return json({error:"Conta não encontrada"},404);
-   await admin.from("marketplace_credentials").delete().eq("account_id",account.id);await admin.from("marketplace_accounts").update({status:"disconnected"}).eq("id",account.id);return json({ok:true});
+   await admin.from("marketplace_tokens").delete().eq("account_id",account.id);await admin.from("marketplace_accounts").update({status:"disconnected"}).eq("id",account.id);return json({ok:true});
   }
   if(body.action==="sync"){
    const {data:account}=await admin.from("marketplace_accounts").select("id,external_account_id").eq("company_id",companyId).eq("id",body.account_id).eq("status","connected").maybeSingle();if(!account)return json({error:"Conta não conectada"},404);
