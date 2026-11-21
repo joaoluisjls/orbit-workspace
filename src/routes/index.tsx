@@ -23,7 +23,7 @@ function Index(){
   if(!company)return;setMlBusy(true);setMessage("");
   try{
    const {data,error}=await supabase.functions.invoke("ml-oauth",{body:{action,company_id:company.id,account_id:accountId}});
-   if(error)throw error;
+   if(error){let detail="";try{const response=(error as {context?:Response}).context;if(response){const payload=await response.clone().json();detail=payload?.error||payload?.message||"";}}catch{}throw new Error(detail||("Falha na função de integração. Verifique se ml-oauth está implantada e configurada no Lovable Cloud. "+error.message));}
    if(data?.error)throw new Error(data.error);
    if(action==="start"){if(!data?.url||!String(data.url).startsWith("https://auth.mercadolivre.com.br/"))throw new Error("URL de autorização inválida");window.location.assign(data.url);return;}
    if(action==="status")setMlAccounts(data.accounts||[]);
@@ -32,7 +32,7 @@ function Index(){
    if(action!=="status"){const {data:result}=await supabase.functions.invoke("ml-oauth",{body:{action:"status",company_id:company.id}});setMlAccounts(result?.accounts||[]);}
   }catch(e){setMessage(e instanceof Error?e.message:"Não foi possível conectar ao Mercado Livre.");}finally{setMlBusy(false)}
  }
- useEffect(()=>{if(!company||!session)return;let cancelled=false;supabase.functions.invoke("ml-oauth",{body:{action:"status",company_id:company.id}}).then(({data})=>{if(!cancelled)setMlAccounts(data?.accounts||[])});return()=>{cancelled=true}},[company?.id,session?.user.id]);
+ useEffect(()=>{if(!company||!session)return;let cancelled=false;supabase.functions.invoke("ml-oauth",{body:{action:"status",company_id:company.id}}).then(({data,error})=>{if(cancelled)return;if(!error)setMlAccounts(data?.accounts||[]);else console.warn("Status da integração indisponível:",error.message)});return()=>{cancelled=true}},[company?.id,session?.user.id]);
  useEffect(()=>{if(typeof window==="undefined")return;const url=new URL(window.location.href);const result=url.searchParams.get("ml_connection");if(result){setMessage(result==="success"?"Loja Mercado Livre conectada com sucesso!":"Não foi possível concluir a autorização.");setTab("Integrações");url.searchParams.delete("ml_connection");window.history.replaceState({},"",url.toString())}},[]);
 
  useEffect(()=>{if(!supabase){setLoading(false);return;}supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{setSession(s);setCompanies([]);setCompany(null);setProducts([]);setExpenses([])});return()=>subscription.unsubscribe()},[]);
